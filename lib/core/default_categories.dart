@@ -3,7 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/repositories/transaction_repository.dart';
 
-/// Helper class to initialize default categories
+/// Helper class to initialize default categories with Ethiopian context
 class DefaultCategories {
   static Future<void> initializeDefaultCategories(
     TransactionRepository repository,
@@ -24,10 +24,10 @@ class DefaultCategories {
     const uuid = Uuid();
     
     return [
-      // Expense Categories
+      // ==================== Expense Categories ====================
       Category(
         id: uuid.v4(),
-        name: 'Food',
+        name: 'Food & Drinks',
         iconCode: Icons.restaurant.codePoint,
         colorCode: Colors.orange.value,
         isExpense: true,
@@ -35,7 +35,7 @@ class DefaultCategories {
       Category(
         id: uuid.v4(),
         name: 'Transport',
-        iconCode: Icons.directions_car.codePoint,
+        iconCode: Icons.directions_bus.codePoint,
         colorCode: Colors.blue.value,
         isExpense: true,
       ),
@@ -48,14 +48,7 @@ class DefaultCategories {
       ),
       Category(
         id: uuid.v4(),
-        name: 'Entertainment',
-        iconCode: Icons.movie.codePoint,
-        colorCode: Colors.pink.value,
-        isExpense: true,
-      ),
-      Category(
-        id: uuid.v4(),
-        name: 'Bills',
+        name: 'Bills & Utilities',
         iconCode: Icons.receipt_long.codePoint,
         colorCode: Colors.red.value,
         isExpense: true,
@@ -76,13 +69,64 @@ class DefaultCategories {
       ),
       Category(
         id: uuid.v4(),
-        name: 'Other',
+        name: 'Entertainment',
+        iconCode: Icons.movie.codePoint,
+        colorCode: Colors.pink.value,
+        isExpense: true,
+      ),
+      Category(
+        id: uuid.v4(),
+        name: 'Rent / Housing',
+        iconCode: Icons.home.codePoint,
+        colorCode: Colors.brown.value,
+        isExpense: true,
+      ),
+      
+      // Ethiopian-specific expense categories
+      Category(
+        id: uuid.v4(),
+        name: 'Equb (እቁብ)',
+        iconCode: Icons.group.codePoint,
+        colorCode: const Color(0xFF009639).value, // Ethiopian green
+        isExpense: true,
+      ),
+      Category(
+        id: uuid.v4(),
+        name: 'Iddir (እድር)',
+        iconCode: Icons.people.codePoint,
+        colorCode: const Color(0xFF6D4C41).value,
+        isExpense: true,
+      ),
+      Category(
+        id: uuid.v4(),
+        name: 'Telebirr',
+        iconCode: Icons.phone_android.codePoint,
+        colorCode: const Color(0xFF00BCD4).value,
+        isExpense: true,
+      ),
+      Category(
+        id: uuid.v4(),
+        name: 'CBE Birr',
+        iconCode: Icons.account_balance.codePoint,
+        colorCode: const Color(0xFF1565C0).value,
+        isExpense: true,
+      ),
+      Category(
+        id: uuid.v4(),
+        name: 'Church / Mosque',
+        iconCode: Icons.brightness_7.codePoint,
+        colorCode: const Color(0xFFFFB300).value,
+        isExpense: true,
+      ),
+      Category(
+        id: uuid.v4(),
+        name: 'Other Expense',
         iconCode: Icons.more_horiz.codePoint,
         colorCode: Colors.grey.value,
         isExpense: true,
       ),
       
-      // Income Categories
+      // ==================== Income Categories ====================
       Category(
         id: uuid.v4(),
         name: 'Salary',
@@ -99,14 +143,28 @@ class DefaultCategories {
       ),
       Category(
         id: uuid.v4(),
-        name: 'Investment',
-        iconCode: Icons.trending_up.codePoint,
+        name: 'Business',
+        iconCode: Icons.store.codePoint,
+        colorCode: const Color(0xFF4CAF50).value,
+        isExpense: false,
+      ),
+      Category(
+        id: uuid.v4(),
+        name: 'Equb Payout (እቁብ)',
+        iconCode: Icons.monetization_on.codePoint,
+        colorCode: const Color(0xFF009639).value,
+        isExpense: false,
+      ),
+      Category(
+        id: uuid.v4(),
+        name: 'Remittance',
+        iconCode: Icons.send.codePoint,
         colorCode: Colors.cyan.value,
         isExpense: false,
       ),
       Category(
         id: uuid.v4(),
-        name: 'Gift',
+        name: 'Gift / Support',
         iconCode: Icons.card_giftcard.codePoint,
         colorCode: Colors.amber.value,
         isExpense: false,

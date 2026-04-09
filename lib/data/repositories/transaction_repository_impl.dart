@@ -47,6 +47,18 @@ class TransactionRepositoryImpl implements TransactionRepository {
   }
 
   @override
+  Future<void> updateTransaction(entity.Transaction transaction) async {
+    final companion = TransactionsCompanion(
+      id: Value(transaction.id),
+      amount: Value(transaction.amount),
+      date: Value(transaction.date),
+      note: Value(transaction.note),
+      categoryId: Value(transaction.categoryId),
+    );
+    await _database.updateTransaction(companion);
+  }
+
+  @override
   Future<double> getTotalBalance() async {
     return await _database.getTotalBalance();
   }
@@ -97,6 +109,19 @@ class TransactionRepositoryImpl implements TransactionRepository {
     await _database.deleteCategory(id);
   }
 
+  @override
+  Future<void> updateCategory(entity.Category category) async {
+    final companion = CategoriesCompanion(
+      id: Value(category.id),
+      name: Value(category.name),
+      iconCode: Value(category.iconCode),
+      colorCode: Value(category.colorCode),
+      isExpense: Value(category.isExpense),
+      monthlyBudget: Value(category.monthlyBudget),
+    );
+    await _database.updateCategory(companion);
+  }
+
   // ==================== Mapping Methods ====================
 
   /// Maps Drift Transaction to Domain Entity Transaction
@@ -118,6 +143,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
       iconCode: dbCategory.iconCode,
       colorCode: dbCategory.colorCode,
       isExpense: dbCategory.isExpense,
+      monthlyBudget: dbCategory.monthlyBudget,
     );
   }
 }

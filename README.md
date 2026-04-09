@@ -1,51 +1,50 @@
-# Personal Financial Tracker
+# ብሬ (Birre) Financial Tracker
 
-A Flutter-based personal financial tracker app built with Clean Architecture principles.
+A premium, Clean Architecture-based personal financial tracker tailored for Ethiopian users. Birre helps you manage transactions, set smart budgets, and reach your savings goals (Equb).
 
-## Architecture
+## ✨ Key Features
 
-- **Clean Architecture**: Separation of concerns with Domain, Data, and Presentation layers
-- **State Management**: Riverpod (annotation-based)
-- **Database**: Drift (SQLite)
-- **Models**: Freezed for immutable data classes
-- **UI**: Material Design 3
+- **📊 Advanced Analytics**: Visualize your spending patterns with interactive Doughnut charts and Weekly trend bar charts (powered by `fl_chart`).
+- **🎯 Equb & Savings Goals**: Create multiple savings goals with custom icons and colors. Track your progress with real-time visual progress bars.
+- **💰 Smart Budgeting (በጀት)**: Set monthly spending limits for expense categories. Get visual warnings (80% usage) and alerts (100% usage) to keep your finances on track.
+- **📩 SMS Automation**: Automatically detect and import transaction messages from CBE, Telebirr, and other financial services.
+- **🌍 Localized Experience**: Built with Ethiopian currency formatting and intuitive category icons.
+- **🌗 Premium UI**: Modern Material Design 3 interface with smooth animations and a focus on visual excellence.
 
-## Getting Started
+## 🛠️ Architecture & Tech Stack
 
-### 1. Install Dependencies
+- **Framework**: Flutter 3 (Material Design 3)
+- **Architecture**: Clean Architecture (Domain, Data, Presentation layers)
+- **State Management**: Riverpod (Annotation-based for type-safety)
+- **Database**: Drift (SQLite) with safe schema migration (v2+)
+- **Charts**: fl_chart (High-performance interactive charts)
+- **Models**: Freezed (Immutable classes & Union types)
 
-\`\`\`bash
+## 🚀 Getting Started
+
+### 1. Prerequisites
+Ensure you have the Flutter SDK installed on your machine.
+
+### 2. Install Dependencies
+```bash
 flutter pub get
-\`\`\`
+```
 
-### 2. Generate Code
-
-\`\`\`bash
+### 3. Generate Code
+Generate immutable models and database code:
+```bash
 dart run build_runner build --delete-conflicting-outputs
-\`\`\`
+```
 
-### 3. Run the App
-
-\`\`\`bash
+### 4. Run the App
+```bash
 flutter run
-\`\`\`
+```
 
-## Project Structure
+## 📂 Project Structure
 
-\`\`\`
+```
 lib/
-├── core/                      # Core utilities and constants
-├── domain/                    # Business logic layer
-│   ├── entities/             # Domain models (Category, Transaction)
-│   └── repositories/         # Repository interfaces
-├── data/                      # Data layer
-│   ├── database/             # Drift database & tables
-│   └── repositories/         # Repository implementations
-└── presentation/              # UI layer
-    ├── providers/            # Riverpod providers
-    └── screens/              # UI screens
-\`\`\`
-
 ## Features
 
 - ✅ Track income and expenses

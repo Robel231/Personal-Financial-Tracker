@@ -7,12 +7,27 @@ import 'connection/connection.dart'
 
 part 'app_database.g.dart';
 
-@DriftDatabase(tables: [Categories, Transactions])
+@DriftDatabase(tables: [Categories, Transactions, Goals])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration {
+    return MigrationStrategy(
+      onCreate: (Migrator m) async {
+        await m.createAll();
+      },
+      onUpgrade: (Migrator m, int from, int to) async {
+        if (from < 2) {
+          await m.addColumn(categories, categories.monthlyBudget);
+          await m.createTable(goals);
+        }
+      },
+    );
+  }
 
   // ==================== Category Methods ====================
   
@@ -25,6 +40,10 @@ class AppDatabase extends _$AppDatabase {
   /// Insert a category
   Future<int> insertCategory(CategoriesCompanion category) =>
       into(categories).insert(category);
+
+  /// Update an existing category
+  Future<bool> updateCategory(CategoriesCompanion category) =>
+      update(categories).replace(category);
 
   /// Delete a category
   Future<int> deleteCategory(String id) =>
@@ -39,6 +58,10 @@ class AppDatabase extends _$AppDatabase {
   /// Delete a transaction
   Future<int> deleteTransaction(String id) =>
       (delete(transactions)..where((tbl) => tbl.id.equals(id))).go();
+
+  /// Update a transaction
+  Future<bool> updateTransaction(TransactionsCompanion transaction) =>
+      update(transactions).replace(transaction);
 
   /// Get all transactions as a stream (ordered by date descending)
   Stream<List<Transaction>> watchAllTransactions() =>
@@ -148,6 +171,26 @@ class AppDatabase extends _$AppDatabase {
 
     return expenses;
   }
+
+  // ==================== Goals Methods ====================
+
+  /// Get all goals as a stream
+  Stream<List<Goal>> watchAllGoals() => select(goals).watch();
+
+  /// Get all goals
+  Future<List<Goal>> getAllGoals() => select(goals).get();
+
+  /// Insert a goal
+  Future<int> insertGoal(GoalsCompanion goal) =>
+      into(goals).insert(goal);
+
+  /// Update a goal
+  Future<bool> updateGoal(GoalsCompanion goal) =>
+      update(goals).replace(goal);
+
+  /// Delete a goal
+  Future<int> deleteGoal(String id) =>
+      (delete(goals)..where((tbl) => tbl.id.equals(id))).go();
 }
 
 /// Helper class to hold transaction with its category

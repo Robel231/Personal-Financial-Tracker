@@ -15,6 +15,9 @@ abstract class TransactionRepository {
   /// Delete a transaction by ID
   Future<void> deleteTransaction(String id);
 
+  /// Update an existing transaction
+  Future<void> updateTransaction(entity.Transaction transaction);
+
   /// Get total balance (income - expense)
   Future<double> getTotalBalance();
 
@@ -35,4 +38,7 @@ abstract class TransactionRepository {
 
   /// Delete a category by ID
   Future<void> deleteCategory(String id);
+
+  /// Update a category
+  Future<void> updateCategory(entity.Category category);
 }

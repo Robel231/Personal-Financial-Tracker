@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'presentation/screens/home_screen.dart';
-import 'presentation/screens/add_transaction_screen.dart';
+import 'core/app_theme.dart';
 import 'core/default_categories.dart';
 import 'presentation/providers/database_provider.dart';
+import 'presentation/providers/settings_provider.dart';
+import 'presentation/screens/home_screen.dart';
+import 'presentation/screens/add_transaction_screen.dart';
 
 void main() {
   runApp(
@@ -33,13 +35,14 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ref.watch(settingsProvider);
+
     return MaterialApp(
-      title: 'Financial Tracker',
+      title: 'ብሬ | Birre',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme(),
+      darkTheme: AppTheme.darkTheme(),
+      themeMode: settings.themeMode,
       home: const HomeScreen(),
       routes: {
         '/add-transaction': (context) => const AddTransactionScreen(),

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import '../../core/currency_formatter.dart';
 import '../providers/spending_by_category_provider.dart';
+import '../providers/transaction_list_provider.dart';
+import '../providers/category_list_provider.dart';
 
 class StatsScreen extends ConsumerStatefulWidget {
   const StatsScreen({super.key});
@@ -222,8 +225,7 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              NumberFormat.currency(symbol: '\$', decimalDigits: 2)
-                  .format(total),
+              CurrencyFormatter.format(total),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 32,
@@ -293,6 +295,11 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
 
           const SizedBox(height: 24),
 
+          // Weekly Bar Chart
+          _buildWeeklyBarChart(),
+
+          const SizedBox(height: 24),
+
           // Legend
           _buildLegend(spendingData),
         ],
@@ -345,6 +352,12 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
   }
 
   Widget _buildLegendItem(CategorySpending data) {
+    final budget = data.category.monthlyBudget;
+    final hasBudget = budget != null && budget > 0;
+    final budgetRatio = hasBudget ? data.totalAmount / budget : 0.0;
+    final isWarning = hasBudget && budgetRatio >= 0.8 && budgetRatio < 1.0;
+    final isOverBudget = hasBudget && budgetRatio >= 1.0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -352,71 +365,250 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.grey[300]!,
+          color: isOverBudget
+              ? const Color(0xFFbc4749)
+              : isWarning
+                  ? Colors.orange
+                  : Colors.grey[300]!,
+          width: (isOverBudget || isWarning) ? 2 : 1,
         ),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Color(data.category.colorCode).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              IconData(
-                data.category.iconCode,
-                fontFamily: 'MaterialIcons',
-              ),
-              color: Color(data.category.colorCode),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  data.category.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  '${data.transactionCount} transaction${data.transactionCount != 1 ? 's' : ''}',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          Row(
             children: [
-              Text(
-                NumberFormat.currency(symbol: '\$', decimalDigits: 2)
-                    .format(data.totalAmount),
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Color(data.category.colorCode).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  IconData(
+                    data.category.iconCode,
+                    fontFamily: 'MaterialIcons',
+                  ),
                   color: Color(data.category.colorCode),
                 ),
               ),
-              Text(
-                '${data.percentage.toStringAsFixed(1)}%',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      data.category.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      '${data.transactionCount} transaction${data.transactionCount != 1 ? 's' : ''}',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    CurrencyFormatter.format(data.totalAmount, useShort: true),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(data.category.colorCode),
+                    ),
+                  ),
+                  Text(
+                    '${data.percentage.toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
+          // Budget progress bar
+          if (hasBudget) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: budgetRatio > 1.0 ? 1.0 : budgetRatio,
+                minHeight: 6,
+                backgroundColor: Colors.grey[200],
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  isOverBudget
+                      ? const Color(0xFFbc4749)
+                      : isWarning
+                          ? Colors.orange
+                          : const Color(0xFF6a994e),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  isOverBudget
+                      ? '⚠️ Over budget!'
+                      : isWarning
+                          ? '⚠️ ${(budgetRatio * 100).toStringAsFixed(0)}% used'
+                          : '${(budgetRatio * 100).toStringAsFixed(0)}% of budget',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isOverBudget
+                        ? const Color(0xFFbc4749)
+                        : isWarning
+                            ? Colors.orange
+                            : const Color(0xFF6a994e),
+                  ),
+                ),
+                Text(
+                  'Limit: ${CurrencyFormatter.format(budget, useShort: true)}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildWeeklyBarChart() {
+    final transactionsAsync = ref.watch(transactionListProvider);
+    final categoriesAsync = ref.watch(categoryListProvider);
+
+    return transactionsAsync.when(
+      data: (transactions) {
+        return categoriesAsync.when(
+          data: (categories) {
+            // Build weekly totals for selected month
+            final Map<int, double> weeklyTotals = {};
+            for (final t in transactions) {
+              if (t.date.month == _selectedMonth && t.date.year == _selectedYear) {
+                final cat = categories.where((c) => c.id == t.categoryId).firstOrNull;
+                if (cat == null) continue;
+                final matchesType = _isExpense ? cat.isExpense : !cat.isExpense;
+                if (!matchesType) continue;
+
+                final weekOfMonth = ((t.date.day - 1) / 7).floor();
+                weeklyTotals[weekOfMonth] = (weeklyTotals[weekOfMonth] ?? 0) + t.amount;
+              }
+            }
+
+            if (weeklyTotals.isEmpty) return const SizedBox.shrink();
+
+            final maxVal = weeklyTotals.values.fold(0.0, (a, b) => a > b ? a : b);
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Weekly Trend',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    height: 180,
+                    child: BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: maxVal * 1.2,
+                        barTouchData: BarTouchData(
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              return BarTooltipItem(
+                                CurrencyFormatter.format(rod.toY, useShort: true),
+                                const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        titlesData: FlTitlesData(
+                          show: true,
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                final labels = ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5'];
+                                if (value.toInt() < labels.length) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Text(
+                                      labels[value.toInt()],
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                          ),
+                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        ),
+                        borderData: FlBorderData(show: false),
+                        gridData: const FlGridData(show: false),
+                        barGroups: List.generate(5, (i) {
+                          final val = weeklyTotals[i] ?? 0;
+                          return BarChartGroupData(
+                            x: i,
+                            barRods: [
+                              BarChartRodData(
+                                toY: val,
+                                width: 22,
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                                gradient: LinearGradient(
+                                  colors: _isExpense
+                                      ? [const Color(0xFFbc4749), const Color(0xFFbc4749).withOpacity(0.6)]
+                                      : [const Color(0xFF386641), const Color(0xFF6a994e)],
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 }

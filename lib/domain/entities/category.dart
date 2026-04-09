@@ -11,6 +11,7 @@ class Category with _$Category {
     required int iconCode,
     required int colorCode,
     required bool isExpense,
+    double? monthlyBudget,
   }) = _Category;
 
   factory Category.fromJson(Map<String, dynamic> json) =>

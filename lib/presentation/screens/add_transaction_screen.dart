@@ -7,9 +7,21 @@ import '../../domain/entities/transaction.dart' as entity;
 import '../../domain/entities/category.dart' as entity;
 import '../providers/database_provider.dart';
 import '../providers/category_list_provider.dart';
+import '../providers/summary_provider.dart';
+import '../providers/transaction_list_provider.dart';
+
 
 class AddTransactionScreen extends ConsumerStatefulWidget {
-  const AddTransactionScreen({super.key});
+  /// Pass an existing transaction to edit it. If null, creates a new transaction.
+  final entity.Transaction? existingTransaction;
+  /// When editing, the category of the existing transaction (to pre-select type).
+  final entity.Category? existingCategory;
+
+  const AddTransactionScreen({
+    super.key,
+    this.existingTransaction,
+    this.existingCategory,
+  });
 
   @override
   ConsumerState<AddTransactionScreen> createState() =>
@@ -20,11 +32,28 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
-  
-  bool _isExpense = true; // Default to expense
+
+  bool _isExpense = true;
   DateTime _selectedDate = DateTime.now();
   entity.Category? _selectedCategory;
   bool _isLoading = false;
+
+  bool get _isEditing => widget.existingTransaction != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditing) {
+      final tx = widget.existingTransaction!;
+      _amountController.text = tx.amount.toStringAsFixed(2);
+      _noteController.text = tx.note == 'No description' ? '' : tx.note;
+      _selectedDate = tx.date;
+      if (widget.existingCategory != null) {
+        _isExpense = widget.existingCategory!.isExpense;
+        _selectedCategory = widget.existingCategory;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -47,10 +76,19 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     }
   }
 
+  /// Invalidate all data providers so the UI refreshes instantly
+  void _invalidateProviders() {
+    ref.invalidate(financialSummaryProvider);
+    ref.invalidate(totalIncomeProvider);
+    ref.invalidate(totalExpenseProvider);
+    ref.invalidate(totalBalanceProvider);
+    ref.invalidate(transactionListProvider);
+    ref.invalidate(allTransactionsProvider);
+    ref.invalidate(allCategoriesProvider);
+  }
+
   Future<void> _saveTransaction() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     if (_selectedCategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,14 +100,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final repository = ref.read(transactionRepositoryProvider);
+
       final transaction = entity.Transaction(
-        id: const Uuid().v4(),
+        id: _isEditing ? widget.existingTransaction!.id : const Uuid().v4(),
         amount: double.parse(_amountController.text),
         date: _selectedDate,
         note: _noteController.text.trim().isEmpty
@@ -78,33 +115,90 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         categoryId: _selectedCategory!.id,
       );
 
-      await repository.insertTransaction(transaction);
+      if (_isEditing) {
+        await repository.updateTransaction(transaction);
+      } else {
+        await repository.insertTransaction(transaction);
+      }
+
+      // Invalidate providers BEFORE popping so listeners rebuild
+      _invalidateProviders();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transaction added successfully!'),
+          SnackBar(
+            content: Text(
+              _isEditing
+                  ? 'Transaction updated successfully!'
+                  : 'Transaction added successfully!',
+            ),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
           ),
         );
-        Navigator.pop(context);
+        Navigator.pop(context, true); // return true to signal mutation
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteTransaction() async {
+    if (!_isEditing) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Transaction'),
+        content: const Text(
+          'Are you sure you want to delete this transaction? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final repository = ref.read(transactionRepositoryProvider);
+      await repository.deleteTransaction(widget.existingTransaction!.id);
+      _invalidateProviders();
+
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Transaction deleted'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        Navigator.pop(context, true);
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -114,24 +208,33 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Transaction'),
+        title: Text(_isEditing ? 'Edit Transaction' : 'Add Transaction'),
         centerTitle: true,
+        actions: [
+          if (_isEditing)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              tooltip: 'Delete',
+              onPressed: _isLoading ? null : _deleteTransaction,
+            ),
+        ],
       ),
       body: categoriesAsync.when(
         data: (categories) {
-          // Filter categories based on transaction type
           final filteredCategories = categories
               .where((cat) => cat.isExpense == _isExpense)
               .toList();
 
-          // Auto-select first category if current selection is invalid
+          // Auto-select first category if current selection doesn't match type
           if (_selectedCategory == null ||
               _selectedCategory!.isExpense != _isExpense) {
             if (filteredCategories.isNotEmpty) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                setState(() {
-                  _selectedCategory = filteredCategories.first;
-                });
+                if (mounted) {
+                  setState(() {
+                    _selectedCategory = filteredCategories.first;
+                  });
+                }
               });
             }
           }
@@ -143,33 +246,33 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Income/Expense Toggle
+                  // Income / Expense Toggle
                   _buildTransactionTypeToggle(),
-                  
                   const SizedBox(height: 24),
-                  
-                  // Amount Field
+
+                  // Amount
                   _buildAmountField(),
-                  
                   const SizedBox(height: 16),
-                  
-                  // Note/Description Field
+
+                  // Note
                   _buildNoteField(),
-                  
                   const SizedBox(height: 16),
-                  
-                  // Date Picker
+
+                  // Date
                   _buildDatePicker(),
-                  
                   const SizedBox(height: 24),
-                  
-                  // Category Selection
+
+                  // Category
                   _buildCategorySection(filteredCategories),
-                  
                   const SizedBox(height: 32),
-                  
-                  // Save Button
+
+                  // Save / Update Button
                   _buildSaveButton(),
+
+                  if (_isEditing) ...[
+                    const SizedBox(height: 12),
+                    _buildDeleteButton(),
+                  ],
                 ],
               ),
             ),
@@ -194,11 +297,12 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _isExpense = true),
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
                   color: _isExpense
-                      ? Colors.red.withOpacity(0.9)
+                      ? const Color(0xFFbc4749).withOpacity(0.9)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -207,13 +311,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   children: [
                     Icon(
                       Icons.arrow_downward,
-                      color: _isExpense ? Colors.white : Colors.red,
+                      color: _isExpense ? Colors.white : const Color(0xFFbc4749),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       'Expense',
                       style: TextStyle(
-                        color: _isExpense ? Colors.white : Colors.red,
+                        color: _isExpense ? Colors.white : const Color(0xFFbc4749),
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -226,11 +330,12 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
           Expanded(
             child: GestureDetector(
               onTap: () => setState(() => _isExpense = false),
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
                   color: !_isExpense
-                      ? Colors.green.withOpacity(0.9)
+                      ? const Color(0xFF6a994e).withOpacity(0.9)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -239,13 +344,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                   children: [
                     Icon(
                       Icons.arrow_upward,
-                      color: !_isExpense ? Colors.white : Colors.green,
+                      color: !_isExpense ? Colors.white : const Color(0xFF6a994e),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       'Income',
                       style: TextStyle(
-                        color: !_isExpense ? Colors.white : Colors.green,
+                        color: !_isExpense ? Colors.white : const Color(0xFF6a994e),
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -263,26 +368,23 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   Widget _buildAmountField() {
     return TextFormField(
       controller: _amountController,
+      autofocus: !_isEditing,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
         FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
       ],
+      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
       decoration: InputDecoration(
         labelText: 'Amount',
-        prefixIcon: const Icon(Icons.attach_money),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        prefixText: 'ETB  ',
+        prefixIcon: const Icon(Icons.money),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true,
       ),
       validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter an amount';
-        }
+        if (value == null || value.isEmpty) return 'Please enter an amount';
         final amount = double.tryParse(value);
-        if (amount == null || amount <= 0) {
-          return 'Please enter a valid amount';
-        }
+        if (amount == null || amount <= 0) return 'Enter a valid amount';
         return null;
       },
     );
@@ -294,9 +396,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       decoration: InputDecoration(
         labelText: 'Note / Description',
         prefixIcon: const Icon(Icons.note_alt_outlined),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         filled: true,
         hintText: 'Optional',
       ),
@@ -307,12 +407,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   Widget _buildDatePicker() {
     return InkWell(
       onTap: () => _selectDate(context),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline,
-          ),
+          border: Border.all(color: Theme.of(context).colorScheme.outline),
           borderRadius: BorderRadius.circular(12),
           color: Theme.of(context).colorScheme.surface,
         ),
@@ -366,11 +465,6 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               'No ${_isExpense ? 'expense' : 'income'} categories available',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 4),
-            const Text(
-              'Please add categories first',
-              style: TextStyle(fontSize: 12),
-            ),
           ],
         ),
       );
@@ -397,14 +491,15 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
 
               return GestureDetector(
                 onTap: () => setState(() => _selectedCategory = category),
-                child: Container(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
                   width: 90,
                   margin: const EdgeInsets.only(right: 12),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? Color(category.colorCode)
-                        : Color(category.colorCode).withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+                        : Color(category.colorCode).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                       color: Color(category.colorCode),
                       width: isSelected ? 3 : 1,
@@ -431,7 +526,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                               ? Colors.white
                               : Color(category.colorCode),
                           fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                          fontSize: 11,
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 2,
@@ -460,13 +555,30 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 color: Colors.white,
               ),
             )
-          : const Icon(Icons.check),
-      label: Text(_isLoading ? 'Saving...' : 'Save Transaction'),
+          : Icon(_isEditing ? Icons.save : Icons.check),
+      label: Text(
+        _isLoading
+            ? 'Saving...'
+            : _isEditing
+                ? 'Update Transaction'
+                : 'Save Transaction',
+      ),
       style: FilledButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Widget _buildDeleteButton() {
+    return OutlinedButton.icon(
+      onPressed: _isLoading ? null : _deleteTransaction,
+      icon: const Icon(Icons.delete_outline, color: Colors.red),
+      label: const Text('Delete Transaction', style: TextStyle(color: Colors.red)),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        side: const BorderSide(color: Colors.red),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
