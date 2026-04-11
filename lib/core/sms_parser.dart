@@ -26,6 +26,32 @@ class SmsParser {
     'OromiaBank',
   ];
 
+  /// Smart Regex rules for precision matching Ethiopian Bank formats
+  static final List<_SmartSmsRule> _smartRules = [
+    // English receive formats
+    _SmartSmsRule(r'received\s+(?:from\s+(?<party>[a-zA-Z0-9\s]+?)\s+)?(?:ETB|Birr|Br\.?)\s*(?<amount>[0-9,]+\.?\d*)', true),
+    _SmartSmsRule(r'received\s+(?:ETB|Birr|Br\.?)\s*(?<amount>[0-9,]+\.?\d*)(?:\s*from\s+(?<party>[a-zA-Z0-9\s]+?))?(?=\s*(?:Ref|Txn)|\.$|$)', true),
+    _SmartSmsRule(r'received\s*(?<amount>[0-9,]+\.?\d*)\s*(?:ETB|Birr|Br\.?)(?:\s*from\s+(?<party>[a-zA-Z0-9\s]+?))?(?=\s*(?:Ref|Txn)|\.$|$)', true),
+    _SmartSmsRule(r'(?:credited|deposited)\s+(?:with\s+)?(?:ETB|Birr|Br\.?)?\s*(?<amount>[0-9,]+\.?\d*)', true),
+
+    // English transfer/expense formats
+    _SmartSmsRule(r'(?:transferred|sent)\s+(?:to\s+(?<party>[a-zA-Z0-9\s]+?)\s+)?(?:ETB|Birr|Br\.?)\s*(?<amount>[0-9,]+\.?\d*)', false),
+    _SmartSmsRule(r'(?:transferred|sent)\s+(?:ETB|Birr|Br\.?)\s*(?<amount>[0-9,]+\.?\d*)(?:\s*to\s+(?<party>[a-zA-Z0-9\s]+?))?(?=\s*(?:Ref|Txn)|\.$|$)', false),
+    _SmartSmsRule(r'(?:transferred|sent)\s*(?<amount>[0-9,]+\.?\d*)\s*(?:ETB|Birr|Br\.?)(?:\s*to\s+(?<party>[a-zA-Z0-9\s]+?))?(?=\s*(?:Ref|Txn)|\.$|$)', false),
+    
+    _SmartSmsRule(r'(?:paid|payment\s+to)\s+(?<party>[a-zA-Z0-9\s]+?)?\s*(?:ETB|Birr|Br\.?)\s*(?<amount>[0-9,]+\.?\d*)', false),
+    _SmartSmsRule(r'(?:paid|payment\s+to)\s+(?:ETB|Birr|Br\.?)\s*(?<amount>[0-9,]+\.?\d*)(?:\s*to\s+(?<party>[a-zA-Z0-9\s]+?))?', false),
+
+    _SmartSmsRule(r'(?:withdrawn|debited)\s+(?:from\s+.*?\/)?(?:ETB|Birr|Br\.?)\s*(?<amount>[0-9,]+\.?\d*)', false),
+    _SmartSmsRule(r'purchase\s+(?:of\s+)?(?:ETB|Birr|Br\.?)?\s*(?<amount>[0-9,]+\.?\d*)', false),
+
+    // Amharic received / income
+    _SmartSmsRule(r'(?:ተቀብለዋል|ገቢ)\s*((?:ከ\s*(?<party>[^\s]+)\s*)?)?(?:ETB|Birr|Br\.?)?\s*(?<amount>[0-9,]+\.?\d*)', true),
+    
+    // Amharic expense / transferred / paid
+    _SmartSmsRule(r'(?:ወጪ|ተላልፏል|ተከፍሏል)\s*((?:ለ\s*(?<party>[^\s]+)\s*)?)?(?:ETB|Birr|Br\.?)?\s*(?<amount>[0-9,]+\.?\d*)', false),
+  ];
+
   /// Check if the SMS sender is a known financial institution
   static bool isFinancialSms(String sender) {
     final senderLower = sender.toLowerCase();
@@ -37,6 +63,45 @@ class SmsParser {
   /// Parse an SMS body and extract the transaction details
   static ParsedTransaction? parseSms(String sender, String body) {
     try {
+      // 1. Try smart regex rules first for maximum precision
+      for (final rule in _smartRules) {
+        final match = rule.pattern.firstMatch(body);
+        if (match != null) {
+          final amountStr = match.namedGroup('amount')?.replaceAll(',', '');
+          if (amountStr != null) {
+            final amount = double.tryParse(amountStr);
+            if (amount != null && amount > 0) {
+              String? party;
+              try {
+                // Ignore match errors if party is uncaptured
+                party = match.namedGroup('party')?.trim();
+              } catch (_) {}
+
+              final isCredit = rule.isIncome;
+              
+              // Extract Ref if exists via heuristic text search
+              String description = _extractDescription(body, sender);
+              if (party != null && party.isNotEmpty) {
+                 final prefix = isCredit ? 'From' : 'To';
+                 description = '$prefix $party - $description';
+              }
+
+              final balance = _extractBalance(body);
+
+              return ParsedTransaction(
+                amount: amount,
+                isIncome: isCredit,
+                description: description,
+                sender: sender,
+                balance: balance,
+                rawMessage: body,
+              );
+            }
+          }
+        }
+      }
+
+      // 2. Fallback to heuristic parser
       final amount = _extractAmount(body);
       if (amount == null || amount <= 0) return null;
 
@@ -194,4 +259,13 @@ class ParsedTransaction {
   @override
   String toString() =>
       'ParsedTransaction(amount: $amount, isIncome: $isIncome, desc: $description)';
+}
+
+/// A matched rule that encapsulates a regex pattern and its context
+class _SmartSmsRule {
+  final RegExp pattern;
+  final bool isIncome;
+
+  _SmartSmsRule(String regexString, this.isIncome)
+      : pattern = RegExp(regexString, caseSensitive: false, unicode: true);
 }
